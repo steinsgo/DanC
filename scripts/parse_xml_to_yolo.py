@@ -2,8 +2,21 @@
 """
 parse_xml_to_yolo.py — Convert XML annotations to YOLO detection format.
 
-For the detection stage, ALL characters share class_id=0 (single-class detection).
-Character recognition is handled separately in Stage 2.
+Actual XML structure (verified from server):
+    <page id="NAME.jpg" width="W" height="H" ...>
+      <text direction="竖排">
+        <text_row no="1">
+          <chunk semantic="正文" rotation="0">
+            <char id="1" position="x1,y1,x2,y2" ...>字</char>
+          </chunk>
+        </text_row>
+      </text>
+    </page>
+
+- Character text = inline text of <char> element
+- Position = attribute of <char> element
+- Width/Height = attributes of <page> element
+- page id ends with .jpg but actual files are .png
 
 Usage:
     python scripts/parse_xml_to_yolo.py \
@@ -15,7 +28,6 @@ Usage:
 import argparse
 import os
 import random
-import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Optional
@@ -106,11 +118,10 @@ def xyxy_to_yolo(x_min: float, y_min: float, x_max: float, y_max: float,
     return (cx, cy, nw, nh)
 
 
-def parse_single_xml(xml_path: Path) -> Optional[dict]:
+def parse_single_xml(xml_path: Path, train_dir: Path) -> Optional[dict]:
     """
     Parse one XML file. Returns dict with keys:
-        image_id, img_w, img_h, annotations: list of (text, x_min, y_min, x_max, y_max)
-    Returns None on failure.
+        image_id, img_w, img_h, png_path, annotations
     """
     try:
         root = parse_xml_auto(xml_path)
@@ -118,7 +129,9 @@ def parse_single_xml(xml_path: Path) -> Optional[dict]:
         print(f"  [WARN] XML parse error in {xml_path.name}: {e}")
         return None
 
-    page = root if root.tag.lower() == "page" else root.find("page") or root.find("Page")
+    page = root if root.tag.lower() == "page" else None
+    if page is None:
+        page = root.find("page") or root.find("Page")
     if page is None:
         for child in root:
             if "page" in child.tag.lower():
@@ -127,68 +140,62 @@ def parse_single_xml(xml_path: Path) -> Optional[dict]:
     if page is None:
         page = root
 
-    image_id = None
-    img_w, img_h = 0, 0
+    raw_id = page.get("id", "") or ""
+    img_w = 0
+    img_h = 0
 
-    id_el = page.find("id") or page.find("ID") or page.find("Id")
-    if id_el is not None and id_el.text:
-        image_id = id_el.text.strip()
-    if page.get("id"):
-        image_id = page.get("id").strip()
+    try:
+        img_w = int(float(page.get("width", "0")))
+    except (ValueError, TypeError):
+        pass
+    try:
+        img_h = int(float(page.get("height", "0")))
+    except (ValueError, TypeError):
+        pass
 
-    for tag in ["width", "Width"]:
-        el = page.find(tag)
-        if el is not None and el.text:
-            try:
-                img_w = int(float(el.text.strip()))
-            except ValueError:
-                pass
+    stem = Path(raw_id).stem if raw_id else xml_path.stem
+
+    png_path = None
+    for candidate in [
+        train_dir / f"{stem}.png",
+        train_dir / f"{stem}.jpg",
+        train_dir / raw_id,
+        train_dir / f"{xml_path.stem}.png",
+    ]:
+        if candidate.exists():
+            png_path = candidate
             break
-    if page.get("width"):
-        try:
-            img_w = int(float(page.get("width")))
-        except ValueError:
-            pass
 
-    for tag in ["height", "Height"]:
-        el = page.find(tag)
-        if el is not None and el.text:
-            try:
-                img_h = int(float(el.text.strip()))
-            except ValueError:
-                pass
-            break
-    if page.get("height"):
-        try:
-            img_h = int(float(page.get("height")))
-        except ValueError:
-            pass
+    if png_path is None:
+        return None
 
-    if image_id is None:
-        image_id = xml_path.stem
+    if img_w <= 0 or img_h <= 0:
+        try:
+            from PIL import Image
+            with Image.open(png_path) as img:
+                img_w, img_h = img.size
+        except Exception:
+            return None
 
     annotations = []
-    char_elements = page.findall("char") or page.findall("Char")
-    if not char_elements:
-        char_elements = list(root.iter("char")) + list(root.iter("Char"))
+    for char_el in page.iter("char"):
+        char_text = (char_el.text or "").strip()
 
-    for char_el in char_elements:
-        text_el = char_el.find("text") or char_el.find("Text")
-        text = ""
-        if text_el is not None and text_el.text:
-            text = text_el.text.strip()
-        elif char_el.text and char_el.text.strip():
-            text = char_el.text.strip()
+        pos_str = char_el.get("position", "")
+        if not pos_str:
+            pos_el = char_el.find("position") or char_el.find("Position")
+            if pos_el is not None and pos_el.text:
+                pos_str = pos_el.text
 
-        pos_el = char_el.find("position") or char_el.find("Position")
-        if pos_el is None or not pos_el.text:
+        if not pos_str:
             continue
-        bbox = parse_position(pos_el.text)
+
+        bbox = parse_position(pos_str)
         if bbox is None:
             continue
 
         annotations.append({
-            "text": text,
+            "text": char_text,
             "x_min": bbox[0],
             "y_min": bbox[1],
             "x_max": bbox[2],
@@ -196,9 +203,10 @@ def parse_single_xml(xml_path: Path) -> Optional[dict]:
         })
 
     return {
-        "image_id": image_id,
+        "image_id": stem,
         "img_w": img_w,
         "img_h": img_h,
+        "png_path": png_path,
         "annotations": annotations,
     }
 
@@ -217,42 +225,11 @@ def process_all_xmls(train_dir: Path):
     total_annotations = 0
 
     for i, xml_path in enumerate(xml_files):
-        rec = parse_single_xml(xml_path)
+        rec = parse_single_xml(xml_path, train_dir)
         if rec is None:
             skipped += 1
             continue
 
-        png_candidates = [
-            train_dir / f"{rec['image_id']}.png",
-            train_dir / f"{rec['image_id']}",
-            train_dir / f"{xml_path.stem}.png",
-        ]
-        png_path = None
-        for c in png_candidates:
-            if c.exists():
-                png_path = c
-                break
-
-        if png_path is None:
-            print(f"  [WARN] No matching PNG for {xml_path.name} (tried image_id={rec['image_id']})")
-            skipped += 1
-            continue
-
-        if rec["img_w"] <= 0 or rec["img_h"] <= 0:
-            try:
-                from PIL import Image
-                with Image.open(png_path) as img:
-                    rec["img_w"], rec["img_h"] = img.size
-            except ImportError:
-                print(f"  [WARN] Cannot determine image size for {png_path.name} (Pillow not available)")
-                skipped += 1
-                continue
-            except Exception as e:
-                print(f"  [WARN] Failed to read image {png_path.name}: {e}")
-                skipped += 1
-                continue
-
-        rec["png_path"] = png_path
         records.append(rec)
 
         for ann in rec["annotations"]:
