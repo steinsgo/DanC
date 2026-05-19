@@ -29,8 +29,9 @@ def main():
     parser = argparse.ArgumentParser(description="Train YOLO detector for ancient char detection")
     parser.add_argument("--data", type=str,
                         default="/home/apulis-dev/userdata/lbh/danc/yolo_dataset/dataset.yaml")
-    parser.add_argument("--weights", type=str, default="models/yolo11m.pt",
-                        help="Path to pretrained weights. Use 'yolo11n.pt'/'yolo11m.pt' etc.")
+    parser.add_argument("--weights", type=str,
+                        default="/home/apulis-dev/userdata/lbh/danc/DanC/model/yolo11m.pt",
+                        help="Path to pretrained weights.")
     parser.add_argument("--model_cfg", type=str, default="yolo11m.yaml",
                         help="Model config YAML (used when training from scratch)")
     parser.add_argument("--epochs", type=int, default=150)

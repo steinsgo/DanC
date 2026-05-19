@@ -45,7 +45,7 @@ if [ "$STEP" -le 2 ]; then
     echo "[Step 2/4] Training YOLO detector..."
 
     # Try pretrained weights, fall back to from-scratch
-    WEIGHTS="$BASE/models/yolo11m.pt"
+    WEIGHTS="$BASE/DanC/model/yolo11m.pt"
     WEIGHTS_ARG=""
     if [ -f "$WEIGHTS" ]; then
         WEIGHTS_ARG="--weights $WEIGHTS"
