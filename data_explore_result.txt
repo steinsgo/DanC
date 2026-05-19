@@ -1,0 +1,123 @@
+======================================================================
+[1] TRAINING DATA: /home/apulis-dev/userdata/lbh/danc/train/out_of_domain
+======================================================================
+  PNG files: 6236
+  XML files: 6237
+  Sample PNG names: ['ZHJWD000009-000001-JICHENG001103.png', 'ZHJWD000015-000001-JICHENG001110.png', 'ZHJWD000021-000001-MINGTU00022.png', 'ZHJWD000030-000001-MINGTU00031.png', 'ZHJWD000031-000001-SANDAI02_005_05.png']
+  Sample XML names: ['ZHJWD000009-000001-JICHENG001103.xml', 'ZHJWD000015-000001-JICHENG001110.xml', 'ZHJWD000021-000001-MINGTU00022.xml', 'ZHJWD000030-000001-MINGTU00031.xml', 'ZHJWD000031-000001-SANDAI02_005_05.xml']
+
+  --- RAW XML: ZHJWD000009-000001-JICHENG001103.xml (first 2000 chars) ---
+<?xml version="1.0" encoding="utf-16" standalone="yes"?>
+<page id="ZHJWD000009-000001-JICHENG001103.jpg" version="1.0" width="1655" height="2674" date="2015/11/6 13:24:58" extension="牛。">
+    <text direction="竖排">
+        <text_row no="1">
+            <chunk semantic="正文" rotation="0">
+                <char id="1" no="1" position="438,1127,958,1862" threshold="-1" extension="原釋寫字:;舊說:;字音:;字義:;構件拆分:;部首拆分:;異體關係:;正誤關係:;通用關係:;合文:;重文:;標點:。;其他:">牛</char>
+            </chunk>
+        </text_row>
+    </text>
+</page>
+
+  --- PARSED STRUCTURE: ZHJWD000009-000001-JICHENG001103.xml ---
+  Root tag: page, attribs: {'id': 'ZHJWD000009-000001-JICHENG001103.jpg', 'version': '1.0', 'width': '1655', 'height': '2674', 'date': '2015/11/6 13:24:58', 'extension': '牛。'}
+    Child tag: text, attribs: {'direction': '竖排'}, text: '\n        '
+      Sub tag: text_row, attribs: {'no': '1'}, text: '\n            '
+        SubSub tag: chunk, attribs: {'semantic': '正文', 'rotation': '0'}, text: '\n                '
+  Total <char> elements found: 1
+    char tag=char, attribs={'id': '1', 'no': '1', 'position': '438,1127,958,1862', 'threshold': '-1', 'extension': '原釋寫字:;舊說:;字音:;字義:;構件拆分:;部首拆分:;異體關係:;正誤關係:;通用關係:;合文:;重文:;標點:。;其他:'}
+      text element: tag=None, text=None
+      position element: tag=None, text=None
+
+  --- RAW XML: ZHJWD000015-000001-JICHENG001110.xml (first 2000 chars) ---
+<?xml version="1.0" encoding="utf-16" standalone="yes"?>
+<page id="ZHJWD000015-000001-JICHENG001110.jpg" version="1.0" width="2127" height="2044" date="2015/11/6 13:32:44" extension="鹿。">
+    <text direction="竖排">
+        <text_row no="1">
+            <chunk semantic="正文" rotation="0">
+                <char id="1" no="1" position="724,802,2470,3362" threshold="-1" extension="原釋寫字:;舊說:;字音:;字義:;構件拆分:;部首拆分:;異體關係:;正誤關係:;通用關係:;合文:;重文:;標點:。;其他:">鹿</char>
+            </chunk>
+        </text_row>
+    </text>
+</page>
+
+  --- PARSED STRUCTURE: ZHJWD000015-000001-JICHENG001110.xml ---
+  Root tag: page, attribs: {'id': 'ZHJWD000015-000001-JICHENG001110.jpg', 'version': '1.0', 'width': '2127', 'height': '2044', 'date': '2015/11/6 13:32:44', 'extension': '鹿。'}
+    Child tag: text, attribs: {'direction': '竖排'}, text: '\n        '
+      Sub tag: text_row, attribs: {'no': '1'}, text: '\n            '
+        SubSub tag: chunk, attribs: {'semantic': '正文', 'rotation': '0'}, text: '\n                '
+  Total <char> elements found: 1
+    char tag=char, attribs={'id': '1', 'no': '1', 'position': '724,802,2470,3362', 'threshold': '-1', 'extension': '原釋寫字:;舊說:;字音:;字義:;構件拆分:;部首拆分:;異體關係:;正誤關係:;通用關係:;合文:;重文:;標點:。;其他:'}
+      text element: tag=None, text=None
+      position element: tag=None, text=None
+
+  --- RAW XML: ZHJWD000021-000001-MINGTU00022.xml (first 2000 chars) ---
+<?xml version="1.0" encoding="utf-16" standalone="yes"?>
+<page id="ZHJWD000021-000001-MINGTU00022.jpg" version="1.0" width="859" height="1335" date="2015/11/6 13:34:06" extension="史。">
+    <text direction="竖排">
+        <text_row no="1">
+            <chunk semantic="正文" rotation="0">
+                <char id="1" no="1" position="187,203,738,1208" threshold="-1" extension="原釋寫字:;舊說:;字音:;字義:;構件拆分:;部首拆分:;異體關係:;正誤關係:;通用關係:;合文:;重文:;標點:。;其他:">史</char>
+            </chunk>
+        </text_row>
+    </text>
+</page>
+
+  --- PARSED STRUCTURE: ZHJWD000021-000001-MINGTU00022.xml ---
+  Root tag: page, attribs: {'id': 'ZHJWD000021-000001-MINGTU00022.jpg', 'version': '1.0', 'width': '859', 'height': '1335', 'date': '2015/11/6 13:34:06', 'extension': '史。'}
+    Child tag: text, attribs: {'direction': '竖排'}, text: '\n        '
+      Sub tag: text_row, attribs: {'no': '1'}, text: '\n            '
+        SubSub tag: chunk, attribs: {'semantic': '正文', 'rotation': '0'}, text: '\n                '
+  Total <char> elements found: 1
+    char tag=char, attribs={'id': '1', 'no': '1', 'position': '187,203,738,1208', 'threshold': '-1', 'extension': '原釋寫字:;舊說:;字音:;字義:;構件拆分:;部首拆分:;異體關係:;正誤關係:;通用關係:;合文:;重文:;標點:。;其他:'}
+      text element: tag=None, text=None
+      position element: tag=None, text=None
+
+======================================================================
+[2] HUST-OBC: /home/apulis-dev/userdata/lbh/danc/HUST-OBC
+======================================================================
+  Top-level items: ['GuoXueDaShi_1390', 'Source.txt', 'deciphered', 'dir_list.txt', 'undeciphered']
+
+  --- DECIPHERED ---
+    Subdirectory count: 1588
+    First 5: ['0001', '0002', '0003', '0004', '0005']
+
+    [0001] contents (35 items): ['G_0001_#U5f8c2.36.5#U540833075#L0200a4#U6b77#U9593.png', 'G_0001_#U63872.151#U540823715#U51fa#U7d44.png', 'G_0001_#U660e992#U54088127.png', 'G_0001_#U75321066#U540812543.png', 'G_0001_#U75321167#U54089575#U8cd3#U7d44.png', 'G_0001_#U7cb9622#U540813155#U8cd3#U7d44.png', 'H_0001_60BB6_0.png', 'H_0001_60BB6_1.png', 'H_0001_60BB6_10.png', 'H_0001_60BB6_11.png', 'H_0001_60BB6_12.png', 'H_0001_60BB6_13.png', 'H_0001_60BB6_14.png', 'H_0001_60BB6_15.png', 'H_0001_60BB6_16.png']
+      File: G_0001_#U5f8c2.36.5#U540833075#L0200a4#U6b77#U9593.png (1443 bytes)
+      File: G_0001_#U63872.151#U540823715#U51fa#U7d44.png (1511 bytes)
+      File: G_0001_#U660e992#U54088127.png (1495 bytes)
+      File: G_0001_#U75321066#U540812543.png (1522 bytes)
+      File: G_0001_#U75321167#U54089575#U8cd3#U7d44.png (1549 bytes)
+
+    [0002] contents (53 items): ['G_0002_#U4eac#U6d252120#U54084366#U8cd3#U7d44.png', 'G_0002_#U524d4.11.5#U54089636.png', 'G_0002_#U524d4.11.6#U54089642#U8cd3#U7d44.png', 'G_0002_#U524d5.6.2#U54089638#U8cd3#U7d44.png', 'G_0002_#U5b5866#U54085708#U8cd3#U7d44.png', 'G_0002_#U5e2b#U53cb1.170.png', 'G_0002_#U71d5292#U54089644.png', 'G_0002_#U7532574#U540827978#U7121#U540d#U7d44.png', 'G_0002_#U7cb9914#U540833236#U6b77#U7d44.png', 'G_0002_#U7cb9915#U540833237#U6b77#U7d44.png', 'G_0002_#U7e8c5.15.9#U54089637.png', 'G_0002_#U967395#U54089641#U8cd3#U7d44.png', 'H_0002_60B1B_0.png', 'H_0002_60B1B_1.png', 'H_0002_60B1B_10.png']
+      File: G_0002_#U4eac#U6d252120#U54084366#U8cd3#U7d44.png (1553 bytes)
+      File: G_0002_#U524d4.11.5#U54089636.png (1374 bytes)
+      File: G_0002_#U524d4.11.6#U54089642#U8cd3#U7d44.png (1400 bytes)
+      File: G_0002_#U524d5.6.2#U54089638#U8cd3#U7d44.png (1347 bytes)
+      File: G_0002_#U5b5866#U54085708#U8cd3#U7d44.png (1279 bytes)
+
+    [0003] contents (25 items): ['H_0003_60009_0.png', 'H_0003_60009_1.png', 'H_0003_60009_10.png', 'H_0003_60009_11.png', 'H_0003_60009_12.png', 'H_0003_60009_13.png', 'H_0003_60009_14.png', 'H_0003_60009_15.png', 'H_0003_60009_16.png', 'H_0003_60009_17.png', 'H_0003_60009_18.png', 'H_0003_60009_19.png', 'H_0003_60009_2.png', 'H_0003_60009_20.png', 'H_0003_60009_21.png']
+      File: H_0003_60009_0.png (1861 bytes)
+      File: H_0003_60009_1.png (1760 bytes)
+      File: H_0003_60009_10.png (1326 bytes)
+      File: H_0003_60009_11.png (1559 bytes)
+      File: H_0003_60009_12.png (1692 bytes)
+
+  --- UNDECIPHERED ---
+    Subdirectory count: 3
+    First 5: ['L', 'X', 'Y+H']
+
+    [L] contents (4444 items): ['1', '10', '100', '1000', '1001', '1002', '1003', '1004', '1005', '1006', '1007', '1008', '1009', '101', '1010']
+      [1] contents (1 items): ['L_#Uff1f_10000.jpg']
+      [10] contents (1 items): ['L_#Uff1f_10034.jpg']
+
+    [X] contents (2288 items): ['1', '10', '100', '1000', '1001', '1002', '1003', '1004', '1005', '1006', '1007', '1008', '1009', '101', '1010']
+      [1] contents (2 items): ['X_#Uff1f_7091_1.png', 'X_#Uff1f_7091_2.png']
+      [10] contents (2 items): ['X_#Uff1f_8190_1.png', 'X_#Uff1f_8190_2.png']
+
+    [Y+H] contents (2676 items): ['60003', '60004', '60005', '60007', '6000A', '60012', '60013', '60015', '60018', '60019', '6001A', '6001F', '60021', '60022', '60023']
+      [60003] contents (25 items): ['H_#Uff1f_60003_0.png', 'H_#Uff1f_60003_1.png', 'H_#Uff1f_60003_10.png', 'H_#Uff1f_60003_11.png', 'H_#Uff1f_60003_12.png', 'H_#Uff1f_60003_13.png', 'H_#Uff1f_60003_14.png', 'H_#Uff1f_60003_15.png', 'H_#Uff1f_60003_16.png', 'H_#Uff1f_60003_17.png']
+      [60004] contents (25 items): ['H_#Uff1f_60004_0.png', 'H_#Uff1f_60004_1.png', 'H_#Uff1f_60004_10.png', 'H_#Uff1f_60004_11.png', 'H_#Uff1f_60004_12.png', 'H_#Uff1f_60004_13.png', 'H_#Uff1f_60004_14.png', 'H_#Uff1f_60004_15.png', 'H_#Uff1f_60004_16.png', 'H_#Uff1f_60004_17.png']
+
+======================================================================
+EXPLORATION COMPLETE. Check output above for format details.
+======================================================================
