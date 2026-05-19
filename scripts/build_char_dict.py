@@ -19,6 +19,27 @@ from collections import Counter
 from pathlib import Path
 
 
+def read_xml_text(xml_path: Path) -> str:
+    """Read XML file with automatic encoding detection (UTF-8 / UTF-16)."""
+    raw = xml_path.read_bytes()
+    if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        return raw.decode("utf-16")
+    if raw[:3] == b'\xef\xbb\xbf':
+        return raw.decode("utf-8-sig")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("utf-16")
+
+
+def parse_xml_auto(xml_path: Path) -> ET.Element:
+    """Parse XML with automatic encoding handling."""
+    text = read_xml_text(xml_path)
+    if text and text[0] == '﻿':
+        text = text[1:]
+    return ET.fromstring(text)
+
+
 def scan_hust_obc(hust_dir: Path) -> dict:
     """
     Walk HUST-OBC directory tree and extract character metadata.
@@ -151,9 +172,8 @@ def scan_train_xmls(train_dir: Path) -> Counter:
 
     for xml_path in xml_files:
         try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-        except ET.ParseError:
+            root = parse_xml_auto(xml_path)
+        except (ET.ParseError, UnicodeDecodeError):
             continue
 
         for char_el in list(root.iter("char")) + list(root.iter("Char")):

@@ -21,6 +21,27 @@ from pathlib import Path
 from typing import Optional
 
 
+def read_xml_text(xml_path: Path) -> str:
+    """Read XML file with automatic encoding detection (UTF-8 / UTF-16)."""
+    raw = xml_path.read_bytes()
+    if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        return raw.decode("utf-16")
+    if raw[:3] == b'\xef\xbb\xbf':
+        return raw.decode("utf-8-sig")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("utf-16")
+
+
+def parse_xml_auto(xml_path: Path) -> ET.Element:
+    """Parse XML with automatic encoding handling."""
+    text = read_xml_text(xml_path)
+    if text and text[0] == '﻿':
+        text = text[1:]
+    return ET.fromstring(text)
+
+
 def parse_position(position_str: str) -> Optional[tuple]:
     """
     Parse coordinate string into (x_min, y_min, x_max, y_max).
@@ -92,12 +113,10 @@ def parse_single_xml(xml_path: Path) -> Optional[dict]:
     Returns None on failure.
     """
     try:
-        tree = ET.parse(xml_path)
-    except ET.ParseError as e:
+        root = parse_xml_auto(xml_path)
+    except (ET.ParseError, UnicodeDecodeError) as e:
         print(f"  [WARN] XML parse error in {xml_path.name}: {e}")
         return None
-
-    root = tree.getroot()
 
     page = root if root.tag.lower() == "page" else root.find("page") or root.find("Page")
     if page is None:

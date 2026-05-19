@@ -14,13 +14,34 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
+def read_xml_text(xml_path: Path) -> str:
+    """Read XML file with automatic encoding detection (UTF-8 / UTF-16)."""
+    raw = xml_path.read_bytes()
+    if raw[:2] in (b'\xff\xfe', b'\xfe\xff'):
+        return raw.decode("utf-16")
+    if raw[:3] == b'\xef\xbb\xbf':
+        return raw.decode("utf-8-sig")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("utf-16")
+
+
+def parse_xml_auto(xml_path: Path) -> ET.Element:
+    """Parse XML with automatic encoding handling."""
+    text = read_xml_text(xml_path)
+    if text and text[0] == '﻿':
+        text = text[1:]
+    return ET.fromstring(text)
+
+
 def explore_train_xml(train_dir: Path, max_files: int = 3):
     print("=" * 70)
     print(f"[1] TRAINING DATA: {train_dir}")
     print("=" * 70)
 
     if not train_dir.exists():
-        print(f"  ERROR: directory does not exist!")
+        print("  ERROR: directory does not exist!")
         return
 
     pngs = sorted(train_dir.glob("*.png"))
@@ -35,14 +56,12 @@ def explore_train_xml(train_dir: Path, max_files: int = 3):
 
     for xml_path in xmls[:max_files]:
         print(f"\n  --- RAW XML: {xml_path.name} (first 2000 chars) ---")
-        with open(xml_path, "r", encoding="utf-8") as f:
-            raw = f.read(2000)
+        raw = read_xml_text(xml_path)[:2000]
         print(raw)
 
         print(f"\n  --- PARSED STRUCTURE: {xml_path.name} ---")
         try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
+            root = parse_xml_auto(xml_path)
             print(f"  Root tag: {root.tag}, attribs: {root.attrib}")
             for child in root:
                 print(f"    Child tag: {child.tag}, attribs: {child.attrib}, text: {repr(child.text)}")
@@ -82,7 +101,7 @@ def explore_hust_obc(hust_dir: Path):
     print("=" * 70)
 
     if not hust_dir.exists():
-        print(f"  ERROR: directory does not exist!")
+        print("  ERROR: directory does not exist!")
         return
 
     top_items = sorted(os.listdir(hust_dir))
