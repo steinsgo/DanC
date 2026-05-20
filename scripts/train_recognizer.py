@@ -175,6 +175,18 @@ def main():
     train_dataset = datasets.ImageFolder(data_dir / "train", transform=train_transform)
     val_dataset = datasets.ImageFolder(data_dir / "val", transform=val_transform)
 
+    # Force val to use the same class_to_idx as train so labels are consistent
+    val_dataset.class_to_idx = train_dataset.class_to_idx
+    val_dataset.classes = train_dataset.classes
+    # Remap val sample labels using the train mapping
+    val_samples = []
+    for path, _ in val_dataset.samples:
+        class_name = os.path.basename(os.path.dirname(path))
+        if class_name in train_dataset.class_to_idx:
+            val_samples.append((path, train_dataset.class_to_idx[class_name]))
+    val_dataset.samples = val_samples
+    val_dataset.targets = [s[1] for s in val_samples]
+
     if is_main:
         print(f"Train samples: {len(train_dataset)}")
         print(f"Val samples: {len(val_dataset)}")
