@@ -2,7 +2,9 @@
 """
 train_yolo.py — Train YOLO detector on ancient rubbing character dataset.
 
-Tuned for: 2x V100-32GB, large rubbing images with many small characters.
+Tuned for: V100-32GB (single GPU by default to avoid DDP frozen-layer crash).
+For dual GPU, pass --device '0,1' --batch 16, but note YOLO11m freezes DFL
+layer which can crash DDP. Single GPU is recommended.
 
 Pretrained weights handling (server is offline):
     1. Download weights on a machine with internet:
@@ -37,10 +39,11 @@ def main():
     parser.add_argument("--epochs", type=int, default=150)
     parser.add_argument("--imgsz", type=int, default=1280,
                         help="Training image size (1280 recommended for rubbing images)")
-    parser.add_argument("--batch", type=int, default=16,
-                        help="Total batch size across all GPUs")
-    parser.add_argument("--device", type=str, default="0,1",
-                        help="GPU devices, e.g. '0,1' for dual GPU")
+    parser.add_argument("--batch", type=int, default=8,
+                        help="Batch size. For single V100-32GB with imgsz=1280, use 8-12.")
+    parser.add_argument("--device", type=str, default="0",
+                        help="GPU device. Use '0' for single GPU (avoids DDP issues with frozen layers). "
+                             "Only use '0,1' if batch>=16 and you've verified DDP compatibility.")
     parser.add_argument("--project", type=str,
                         default="/home/apulis-dev/userdata/lbh/danc/runs/detect")
     parser.add_argument("--name", type=str, default="ancient_char_det")
