@@ -120,7 +120,7 @@ def validate(model, loader, criterion, device):
         total += images.size(0)
 
         _, top5_pred = outputs.topk(min(5, outputs.size(1)), dim=1)
-        top5_correct += sum(labels[i] in top5_pred[i] for i in range(labels.size(0)))
+        top5_correct += (top5_pred == labels.unsqueeze(1)).any(1).sum().item()
 
     return total_loss / total, correct / total, top5_correct / total
 
@@ -174,13 +174,6 @@ def main():
 
     train_dataset = datasets.ImageFolder(data_dir / "train", transform=train_transform)
     val_dataset = datasets.ImageFolder(data_dir / "val", transform=val_transform)
-
-    folder_to_dictid = {}
-    id_to_char = meta["id_to_char"]
-    for folder_name in sorted(os.listdir(data_dir / "train")):
-        if folder_name.isdigit():
-            char = id_to_char.get(folder_name, folder_name)
-            folder_to_dictid[folder_name] = int(folder_name)
 
     if is_main:
         print(f"Train samples: {len(train_dataset)}")

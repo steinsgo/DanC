@@ -61,7 +61,7 @@ if [ "$STEP" -le 2 ]; then
         --epochs 150 \
         --imgsz 1280 \
         --batch 16 \
-        --device 0,1 \
+        --device 0 \
         --project "$BASE/runs/detect" \
         --name ancient_char_det
 
