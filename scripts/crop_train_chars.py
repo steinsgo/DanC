@@ -143,6 +143,14 @@ def main():
                 continue
 
             x_min, y_min, x_max, y_max = bbox
+
+            # Clamp bbox to image bounds first
+            x_min = max(0, min(x_min, img_w - 1))
+            y_min = max(0, min(y_min, img_h - 1))
+            x_max = max(0, min(x_max, img_w))
+            y_max = max(0, min(y_max, img_h))
+
+            # Recompute width/height after clamping
             bw = x_max - x_min
             bh = y_max - y_min
             if bw <= 2 or bh <= 2:
@@ -155,6 +163,11 @@ def main():
             crop_y1 = max(0, int(y_min - pad_y))
             crop_x2 = min(img_w, int(x_max + pad_x))
             crop_y2 = min(img_h, int(y_max + pad_y))
+
+            # Final safety check: skip if crop area is invalid
+            if crop_x2 <= crop_x1 or crop_y2 <= crop_y1:
+                stats["skipped_bbox"] += 1
+                continue
 
             crop = img.crop((crop_x1, crop_y1, crop_x2, crop_y2))
 
