@@ -76,14 +76,15 @@ def build_rec_transform(img_size: int):
 
 
 def run_detection(detector, img_path: str, conf_thresh: float = 0.25,
-                   iou_thresh: float = 0.45, imgsz: int = 1280):
+                   iou_thresh: float = 0.45, imgsz: int = 1280,
+                   device: str = "cuda:0"):
     results = detector.predict(
         source=img_path,
         conf=conf_thresh,
         iou=iou_thresh,
         imgsz=imgsz,
         verbose=False,
-        device=0,
+        device=device,
     )
     boxes = []
     if results and len(results) > 0:
@@ -207,6 +208,7 @@ def main():
             conf_thresh=args.det_conf,
             iou_thresh=args.det_iou,
             imgsz=args.det_imgsz,
+            device=args.device,
         )
 
         img = Image.open(img_path).convert("RGB")
