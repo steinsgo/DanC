@@ -132,8 +132,7 @@ def run_recognition(recognizer, rec_transform, img: Image.Image,
 
     for start in range(0, len(crops), batch_size):
         batch = torch.stack(crops[start:start + batch_size]).to(device)
-        use_amp = device.startswith("cuda")
-        with torch.no_grad(), torch.amp.autocast("cuda", enabled=use_amp):
+        with torch.no_grad(), torch.amp.autocast("cuda"):
             outputs = recognizer(batch)
         _, predicted = outputs.max(1)
 
@@ -169,11 +168,8 @@ def main():
     parser.add_argument("--det_iou", type=float, default=0.45)
     parser.add_argument("--det_imgsz", type=int, default=1280)
     parser.add_argument("--rec_batch", type=int, default=128)
-    parser.add_argument("--device", type=str, default="auto")
+    parser.add_argument("--device", type=str, default="cuda:0")
     args = parser.parse_args()
-
-    if args.device == "auto":
-        args.device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
     input_dir = Path(args.input_dir)
     if not input_dir.exists():
