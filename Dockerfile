@@ -1,4 +1,4 @@
-FROM pytorch/pytorch:2.2.0-cuda12.1-cudnn8-runtime
+FROM python:3.11-slim
 
 ENV TZ=Asia/Shanghai \
     LANG=C.UTF-8 \
@@ -7,18 +7,21 @@ ENV TZ=Asia/Shanghai \
 
 RUN mkdir -p /app /saisresult && \
     apt-get update && \
-    apt-get install -y --no-install-recommends \
-        tini bash libgl1-mesa-glx libglib2.0-0 && \
+    apt-get install -y --no-install-recommends libglib2.0-0 libxcb1 libsm6 libxext6 libxrender1 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir ultralytics>=8.1.0 opencv-python-headless>=4.8.0 Pillow>=10.0.0
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com \
+    "numpy<2" && \
+    pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com \
+    torch==2.2.0 torchvision==0.17.0 && \
+    pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com \
+    ultralytics opencv-python-headless Pillow
 
 COPY models/ /app/models/
 COPY scripts/run_inference.py /app/src/run_inference.py
 COPY run.sh /app/run.sh
 RUN chmod +x /app/run.sh
 
-ENTRYPOINT ["/usr/bin/tini", "--", "bash", "/app/run.sh"]
+ENTRYPOINT ["bash", "/app/run.sh"]
