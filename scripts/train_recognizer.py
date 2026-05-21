@@ -49,12 +49,20 @@ def build_transforms(img_size=64, is_train=True):
         ])
 
 
-def build_model(num_classes: int, backbone: str = "resnet50"):
+def build_model(num_classes: int, backbone: str = "resnet50", pretrained_path: str = ""):
     if backbone == "resnet50":
         model = models.resnet50(weights=None)
+        if pretrained_path:
+            state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
+            model.load_state_dict(state_dict, strict=True)
+            print(f"Loaded pretrained weights: {pretrained_path}")
         model.fc = nn.Linear(model.fc.in_features, num_classes)
     elif backbone == "resnet101":
         model = models.resnet101(weights=None)
+        if pretrained_path:
+            state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
+            model.load_state_dict(state_dict, strict=True)
+            print(f"Loaded pretrained weights: {pretrained_path}")
         model.fc = nn.Linear(model.fc.in_features, num_classes)
     elif backbone == "efficientnet_b0":
         model = models.efficientnet_b0(weights=None)
@@ -141,6 +149,8 @@ def main():
     parser.add_argument("--gpus", type=str, default="0,1")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--resume", type=str, default="")
+    parser.add_argument("--pretrained", type=str, default="",
+                        help="Path to pretrained backbone weights (e.g. resnet50_imagenet.pth)")
     args = parser.parse_args()
 
     gpu_list = [int(g) for g in args.gpus.split(",")]
@@ -211,7 +221,7 @@ def main():
     )
 
     actual_num_classes = len(train_dataset.classes)
-    model = build_model(actual_num_classes, args.backbone).to(device)
+    model = build_model(actual_num_classes, args.backbone, args.pretrained).to(device)
 
     if args.resume:
         ckpt = torch.load(args.resume, map_location=device, weights_only=False)
