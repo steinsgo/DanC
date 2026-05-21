@@ -28,16 +28,17 @@ from torchvision import datasets, transforms, models
 def build_transforms(img_size=64, is_train=True):
     if is_train:
         return transforms.Compose([
-            transforms.Resize((img_size + 8, img_size + 8)),
+            transforms.Resize((img_size + 16, img_size + 16)),
             transforms.RandomCrop(img_size),
-            transforms.RandomRotation(10),
-            transforms.RandomAffine(degrees=0, translate=(0.05, 0.05), scale=(0.9, 1.1)),
-            transforms.ColorJitter(brightness=0.3, contrast=0.3),
+            transforms.RandomRotation(15),
+            transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.85, 1.15)),
+            transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.2),
+            transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
             transforms.Grayscale(num_output_channels=3),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                  std=[0.229, 0.224, 0.225]),
-            transforms.RandomErasing(p=0.2, scale=(0.02, 0.15)),
+            transforms.RandomErasing(p=0.3, scale=(0.02, 0.2)),
         ])
     else:
         return transforms.Compose([
@@ -56,14 +57,20 @@ def build_model(num_classes: int, backbone: str = "resnet50", pretrained_path: s
             state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
             model.load_state_dict(state_dict, strict=True)
             print(f"Loaded pretrained weights: {pretrained_path}")
-        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        model.fc = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.Linear(model.fc.in_features, num_classes),
+        )
     elif backbone == "resnet101":
         model = models.resnet101(weights=None)
         if pretrained_path:
             state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
             model.load_state_dict(state_dict, strict=True)
             print(f"Loaded pretrained weights: {pretrained_path}")
-        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        model.fc = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.Linear(model.fc.in_features, num_classes),
+        )
     elif backbone == "efficientnet_b0":
         model = models.efficientnet_b0(weights=None)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
@@ -232,8 +239,8 @@ def main():
     if use_ddp:
         model = DDP(model, device_ids=[device.index])
 
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=1e-6)
     scaler = torch.amp.GradScaler("cuda")
 
