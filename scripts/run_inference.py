@@ -48,10 +48,18 @@ def load_recognizer(rec_model_path: str, device: str):
 
     if backbone == "resnet50":
         model = models.resnet50(weights=None)
-        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        in_features = model.fc.in_features
+        model.fc = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.Linear(in_features, num_classes),
+        )
     elif backbone == "resnet101":
         model = models.resnet101(weights=None)
-        model.fc = nn.Linear(model.fc.in_features, num_classes)
+        in_features = model.fc.in_features
+        model.fc = nn.Sequential(
+            nn.Dropout(0.3),
+            nn.Linear(in_features, num_classes),
+        )
     elif backbone == "efficientnet_b0":
         model = models.efficientnet_b0(weights=None)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
