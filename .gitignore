@@ -1,6 +1,10 @@
+submission/checkpoint/
+submission/processed_data/
+submission/result/
+submission.zip
+*.pt
+*.pth
+*.zip
 __pycache__/
 *.pyc
-*.pyo
-runs/
-models/*.pt
-*.Zone.Identifier
+private_data/
