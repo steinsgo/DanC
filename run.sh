@@ -7,10 +7,13 @@ echo "Start time: $(date)"
 [ -d "/saisdata" ] || { echo "Error: /saisdata not found"; exit 1; }
 [ -d "/saisresult" ] || { echo "Error: /saisresult not found"; exit 1; }
 
-INPUT_DIR="/saisdata/13/eval/images"
+INPUT_DIR="/saisdata/50/eval/images"
+if [ ! -d "$INPUT_DIR" ]; then
+    INPUT_DIR="/saisdata/13/eval/images"
+fi
 if [ ! -d "$INPUT_DIR" ]; then
     INPUT_DIR="/saisdata"
-    echo "Warning: /saisdata/13/eval/images not found, using /saisdata"
+    echo "Warning: fallback to /saisdata"
 fi
 
 echo "Input: $INPUT_DIR"

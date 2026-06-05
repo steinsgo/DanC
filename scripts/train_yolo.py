@@ -104,12 +104,12 @@ def main():
         hsv_v=0.3,
 
         # --- Training stability ---
-        patience=30,
+        patience=50,
         save_period=10,
         workers=8,
         amp=True,
         cos_lr=True,
-        close_mosaic=20,
+        close_mosaic=max(20, args.epochs // 5),
 
         # --- Validation ---
         val=True,
