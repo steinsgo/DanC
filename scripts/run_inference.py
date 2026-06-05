@@ -64,7 +64,13 @@ def load_recognizer(rec_model_path: str, device: str):
         model = models.efficientnet_b0(weights=None)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
 
-    model.load_state_dict(ckpt["model_state_dict"])
+    state = ckpt["model_state_dict"]
+    # Older checkpoints saved fc as a plain Linear (fc.weight/fc.bias).
+    # Remap to Sequential(Dropout, Linear) keys if needed.
+    if "fc.weight" in state and "fc.1.weight" not in state:
+        state["fc.1.weight"] = state.pop("fc.weight")
+        state["fc.1.bias"] = state.pop("fc.bias")
+    model.load_state_dict(state)
     model.to(device).eval()
 
     idx_to_class = {v: k for k, v in class_to_idx.items()}
