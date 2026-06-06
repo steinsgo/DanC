@@ -2,11 +2,13 @@
 """
 train_recognizer.py — Train ancient character recognition model (Stage 2).
 
-Uses a ResNet50 backbone fine-tuned on cropped character images from training data.
-Dataset is organized as: cropped_chars/{train,val}/{class_id}/*.png
+Improvements over v5:
+  - img_size default: 128 → 160
+  - EMA (Exponential Moving Average) of model weights
+  - Mixup augmentation for head/mid classes only
 
 Long-tail rebalance:
-    --sampling uniform  : standard ImageFolder sampling (default before)
+    --sampling uniform  : standard ImageFolder sampling
     --sampling sqrt     : per-sample weight = 1/sqrt(class_count)  (recommended)
     --sampling balanced : per-sample weight = 1/class_count
 
@@ -22,6 +24,7 @@ import math
 import os
 import time
 from collections import Counter
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
@@ -34,31 +37,39 @@ from torchvision import datasets, transforms, models
 
 
 # ---------------------------------------------------------------------------
+# EMA
+# ---------------------------------------------------------------------------
+
+class ModelEMA:
+    def __init__(self, model, decay=0.9998):
+        self.ema = deepcopy(model).eval()
+        self.decay = decay
+        for p in self.ema.parameters():
+            p.requires_grad_(False)
+
+    def update(self, model):
+        with torch.no_grad():
+            msd = (model.module if hasattr(model, "module") else model).state_dict()
+            for k, v in self.ema.state_dict().items():
+                if v.dtype.is_floating_point:
+                    v.mul_(self.decay).add_((1 - self.decay) * msd[k].detach())
+
+
+# ---------------------------------------------------------------------------
 # Custom samplers
 # ---------------------------------------------------------------------------
 
 class DistributedWeightedSampler(Sampler):
-    """
-    Weighted sampling that's also DDP-aware.
-
-    Each epoch every rank seeds the same generator (seed + epoch), draws the
-    same global index pool with multinomial(weights, num_samples, replacement=True),
-    then takes its own slice. This guarantees no overlap between ranks and
-    consistent behavior across runs.
-    """
     def __init__(self, weights, num_samples, num_replicas=None, rank=None, seed=0):
         if num_replicas is None:
             num_replicas = dist.get_world_size() if dist.is_initialized() else 1
         if rank is None:
             rank = dist.get_rank() if dist.is_initialized() else 0
-
         self.weights = torch.as_tensor(weights, dtype=torch.double)
         self.num_replicas = num_replicas
         self.rank = rank
         self.seed = seed
         self.epoch = 0
-
-        # Round up so num_samples is divisible by num_replicas
         self.num_samples_per_rank = math.ceil(num_samples / num_replicas)
         self.total_samples = self.num_samples_per_rank * num_replicas
 
@@ -69,8 +80,7 @@ class DistributedWeightedSampler(Sampler):
             self.weights, self.total_samples, replacement=True, generator=g
         )
         start = self.rank * self.num_samples_per_rank
-        end = start + self.num_samples_per_rank
-        return iter(all_indices[start:end].tolist())
+        return iter(all_indices[start:start + self.num_samples_per_rank].tolist())
 
     def __len__(self):
         return self.num_samples_per_rank
@@ -80,24 +90,9 @@ class DistributedWeightedSampler(Sampler):
 
 
 def compute_sample_weights(targets, num_classes, strategy="sqrt"):
-    """
-    Compute per-sample weights for long-tail rebalancing.
-
-    strategy:
-        "uniform"  -> all weights equal
-        "sqrt"     -> 1 / sqrt(count)            (power 0.5)
-        "balanced" -> 1 / count                  (power 1.0)
-        "powerXXX" -> 1 / count^XXX, e.g. "power0.25"
-
-    Returns:
-        weights: np.ndarray of length len(targets)
-        class_counts: dict {class_id: count}
-    """
     counter = Counter(targets)
-    class_counts = np.array([counter.get(c, 0) for c in range(num_classes)],
-                            dtype=np.float64)
+    class_counts = np.array([counter.get(c, 0) for c in range(num_classes)], dtype=np.float64)
     safe_counts = np.where(class_counts > 0, class_counts, 1.0)
-
     if strategy == "sqrt":
         per_class_weight = 1.0 / np.sqrt(safe_counts)
     elif strategy == "balanced":
@@ -109,23 +104,16 @@ def compute_sample_weights(targets, num_classes, strategy="sqrt"):
         per_class_weight = 1.0 / np.power(safe_counts, power)
     else:
         raise ValueError(f"Unknown sampling strategy: {strategy}")
-
     per_class_weight = per_class_weight / per_class_weight.max()
     weights = np.array([per_class_weight[t] for t in targets], dtype=np.float64)
     return weights, dict(counter)
 
 
 def bucket_classes(class_counts, num_classes):
-    """
-    Split classes into head/middle/tail buckets by frequency.
-
-    Returns: (head_set, mid_set, tail_set) of class indices.
-    """
     counts = np.array([class_counts.get(c, 0) for c in range(num_classes)])
-    sorted_classes = np.argsort(-counts)  # most frequent first
-
+    sorted_classes = np.argsort(-counts)
     n = num_classes
-    head = set(sorted_classes[: n // 3].tolist())
+    head = set(sorted_classes[:n // 3].tolist())
     mid = set(sorted_classes[n // 3: 2 * n // 3].tolist())
     tail = set(sorted_classes[2 * n // 3:].tolist())
     return head, mid, tail
@@ -135,10 +123,10 @@ def bucket_classes(class_counts, num_classes):
 # Transforms / model
 # ---------------------------------------------------------------------------
 
-def build_transforms(img_size=128, is_train=True):
+def build_transforms(img_size=160, is_train=True):
     if is_train:
         return transforms.Compose([
-            transforms.Resize((img_size + 16, img_size + 16)),
+            transforms.Resize((img_size + 20, img_size + 20)),
             transforms.RandomCrop(img_size),
             transforms.RandomRotation(15),
             transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.85, 1.15)),
@@ -146,8 +134,7 @@ def build_transforms(img_size=128, is_train=True):
             transforms.RandomPerspective(distortion_scale=0.2, p=0.3),
             transforms.Grayscale(num_output_channels=3),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225]),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             transforms.RandomErasing(p=0.3, scale=(0.02, 0.2)),
         ])
     else:
@@ -155,8 +142,7 @@ def build_transforms(img_size=128, is_train=True):
             transforms.Resize((img_size, img_size)),
             transforms.Grayscale(num_output_channels=3),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225]),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
 
@@ -167,20 +153,14 @@ def build_model(num_classes: int, backbone: str = "resnet50", pretrained_path: s
             state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
             model.load_state_dict(state_dict, strict=True)
             print(f"Loaded pretrained weights: {pretrained_path}")
-        model.fc = nn.Sequential(
-            nn.Dropout(0.3),
-            nn.Linear(model.fc.in_features, num_classes),
-        )
+        model.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(model.fc.in_features, num_classes))
     elif backbone == "resnet101":
         model = models.resnet101(weights=None)
         if pretrained_path:
             state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
             model.load_state_dict(state_dict, strict=True)
             print(f"Loaded pretrained weights: {pretrained_path}")
-        model.fc = nn.Sequential(
-            nn.Dropout(0.3),
-            nn.Linear(model.fc.in_features, num_classes),
-        )
+        model.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(model.fc.in_features, num_classes))
     elif backbone == "efficientnet_b0":
         model = models.efficientnet_b0(weights=None)
         model.classifier[1] = nn.Linear(model.classifier[1].in_features, num_classes)
@@ -190,10 +170,32 @@ def build_model(num_classes: int, backbone: str = "resnet50", pretrained_path: s
 
 
 # ---------------------------------------------------------------------------
+# Mixup
+# ---------------------------------------------------------------------------
+
+def mixup_batch(images, labels, head_set, mid_set, alpha=0.4):
+    """Apply Mixup only to samples whose label is in head or mid classes."""
+    device = images.device
+    mask = torch.tensor(
+        [int(l.item()) in head_set or int(l.item()) in mid_set for l in labels],
+        dtype=torch.bool, device=device,
+    )
+    if mask.sum() < 2:
+        return images, labels, labels, torch.ones(len(labels), device=device)
+
+    lam = np.random.beta(alpha, alpha)
+    idx = torch.randperm(len(images), device=device)
+    mixed = images.clone()
+    mixed[mask] = lam * images[mask] + (1 - lam) * images[idx][mask]
+    return mixed, labels, labels[idx], torch.where(mask, torch.full_like(mask, lam, dtype=torch.float), torch.ones(len(labels), device=device, dtype=torch.float))
+
+
+# ---------------------------------------------------------------------------
 # Train / validate
 # ---------------------------------------------------------------------------
 
-def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch):
+def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch,
+                    ema, head_set, mid_set, mixup_alpha=0.4):
     model.train()
     total_loss = 0.0
     correct = 0
@@ -203,17 +205,19 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch):
         images = images.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
 
-        optimizer.zero_grad(set_to_none=True)
+        images, labels_a, labels_b, lam = mixup_batch(images, labels, head_set, mid_set, alpha=mixup_alpha)
 
+        optimizer.zero_grad(set_to_none=True)
         with torch.amp.autocast("cuda"):
             outputs = model(images)
-            loss = criterion(outputs, labels)
+            loss = (lam * criterion(outputs, labels_a) + (1 - lam) * criterion(outputs, labels_b)).mean()
 
         scaler.scale(loss).backward()
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
         scaler.step(optimizer)
         scaler.update()
+        ema.update(model)
 
         total_loss += loss.item() * images.size(0)
         _, predicted = outputs.max(1)
@@ -229,52 +233,42 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, epoch):
 
 @torch.no_grad()
 def validate(model, loader, criterion, device, head_set=None, mid_set=None, tail_set=None):
-    """Validate. If buckets provided, also report per-bucket accuracy."""
     model.eval()
     total_loss = 0.0
     correct = 0
     total = 0
     top5_correct = 0
-
     bucket_stats = {"head": [0, 0], "mid": [0, 0], "tail": [0, 0]}
 
     for images, labels in loader:
         images = images.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
-
         with torch.amp.autocast("cuda"):
             outputs = model(images)
             loss = criterion(outputs, labels)
-
         total_loss += loss.item() * images.size(0)
         _, predicted = outputs.max(1)
         match = predicted.eq(labels)
         correct += match.sum().item()
         total += images.size(0)
-
         _, top5_pred = outputs.topk(min(5, outputs.size(1)), dim=1)
         top5_correct += (top5_pred == labels.unsqueeze(1)).any(1).sum().item()
-
         if head_set is not None:
             labels_cpu = labels.cpu().numpy()
             match_cpu = match.cpu().numpy()
             for lbl, m in zip(labels_cpu, match_cpu):
                 lbl = int(lbl)
-                if lbl in head_set:
-                    bucket = "head"
-                elif lbl in mid_set:
-                    bucket = "mid"
-                else:
-                    bucket = "tail"
+                bucket = "head" if lbl in head_set else ("mid" if lbl in mid_set else "tail")
                 bucket_stats[bucket][0] += int(m)
                 bucket_stats[bucket][1] += 1
 
-    bucket_accs = {}
-    for k, (c, t) in bucket_stats.items():
-        bucket_accs[k] = (c / t) if t > 0 else 0.0
-
+    bucket_accs = {k: (c / t) if t > 0 else 0.0 for k, (c, t) in bucket_stats.items()}
     return total_loss / total, correct / total, top5_correct / total, bucket_accs
 
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description="Train ancient char recognizer")
@@ -284,19 +278,19 @@ def main():
                         default="/home/apulis-dev/userdata/lbh/danc/runs/recognize")
     parser.add_argument("--backbone", type=str, default="resnet50",
                         choices=["resnet50", "resnet101", "efficientnet_b0"])
-    parser.add_argument("--img_size", type=int, default=128)
+    parser.add_argument("--img_size", type=int, default=160)
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--batch", type=int, default=128, help="Batch size PER GPU")
+    parser.add_argument("--batch", type=int, default=128)
     parser.add_argument("--lr", type=float, default=2e-4)
     parser.add_argument("--gpus", type=str, default="0,1")
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--resume", type=str, default="")
-    parser.add_argument("--pretrained", type=str, default="",
-                        help="Path to pretrained backbone weights")
-    parser.add_argument("--sampling", type=str, default="sqrt",
-                        help="Long-tail rebalance: uniform | sqrt | balanced | powerXXX (e.g. power0.25)")
-    parser.add_argument("--samples_per_epoch_mult", type=float, default=1.0,
-                        help="Multiplier for # of samples per epoch (only when sampling != uniform)")
+    parser.add_argument("--pretrained", type=str, default="")
+    parser.add_argument("--sampling", type=str, default="sqrt")
+    parser.add_argument("--samples_per_epoch_mult", type=float, default=1.0)
+    parser.add_argument("--mixup_alpha", type=float, default=0.4,
+                        help="Mixup alpha; set 0 to disable")
+    parser.add_argument("--ema_decay", type=float, default=0.9998)
     args = parser.parse_args()
 
     gpu_list = [int(g) for g in args.gpus.split(",")]
@@ -316,23 +310,21 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    meta_path = data_dir / "meta.json"
-    with open(meta_path, "r", encoding="utf-8") as f:
+    with open(data_dir / "meta.json", "r", encoding="utf-8") as f:
         meta = json.load(f)
     num_classes = meta["num_classes"]
 
     if is_main:
         print(f"Classes (from meta): {num_classes}")
         print(f"Device: {device} ({'DDP' if use_ddp else 'single GPU'})")
-        print(f"Sampling strategy: {args.sampling}")
+        print(f"Sampling: {args.sampling}  img_size: {args.img_size}  "
+              f"mixup_alpha: {args.mixup_alpha}  ema_decay: {args.ema_decay}")
 
-    train_transform = build_transforms(args.img_size, is_train=True)
-    val_transform = build_transforms(args.img_size, is_train=False)
+    train_dataset = datasets.ImageFolder(data_dir / "train",
+                                         transform=build_transforms(args.img_size, True))
+    val_dataset = datasets.ImageFolder(data_dir / "val",
+                                       transform=build_transforms(args.img_size, False))
 
-    train_dataset = datasets.ImageFolder(data_dir / "train", transform=train_transform)
-    val_dataset = datasets.ImageFolder(data_dir / "val", transform=val_transform)
-
-    # Force val to use the same class_to_idx as train
     val_dataset.class_to_idx = train_dataset.class_to_idx
     val_dataset.classes = train_dataset.classes
     val_samples = []
@@ -345,32 +337,20 @@ def main():
 
     actual_num_classes = len(train_dataset.classes)
 
-    if is_main:
-        print(f"Train samples: {len(train_dataset)}")
-        print(f"Val samples:   {len(val_dataset)}")
-        print(f"Actual classes: {actual_num_classes}")
-
-    # ---- Build train sampler (uniform / sqrt / balanced) ----
-    train_targets = train_dataset.targets
     sample_weights, train_class_counts = compute_sample_weights(
-        train_targets, actual_num_classes, strategy=args.sampling
+        train_dataset.targets, actual_num_classes, strategy=args.sampling
     )
+    head_set, mid_set, tail_set = bucket_classes(train_class_counts, actual_num_classes)
 
     if is_main:
         counts_arr = np.array(list(train_class_counts.values()))
-        print(f"Train class freq: min={counts_arr.min()} median={int(np.median(counts_arr))} "
-              f"max={counts_arr.max()} mean={counts_arr.mean():.1f}")
-        n_singleton = int((counts_arr == 1).sum())
-        n_under5 = int((counts_arr < 5).sum())
-        print(f"Long-tail: classes with count=1: {n_singleton}, count<5: {n_under5}")
-
-    head_set, mid_set, tail_set = bucket_classes(train_class_counts, actual_num_classes)
+        print(f"Train: {len(train_dataset)} samples, {actual_num_classes} classes | "
+              f"Val: {len(val_dataset)}")
+        print(f"Class freq: min={counts_arr.min()} median={int(np.median(counts_arr))} "
+              f"max={counts_arr.max()}")
 
     if args.sampling == "uniform":
-        if use_ddp:
-            train_sampler = DistributedSampler(train_dataset, shuffle=True)
-        else:
-            train_sampler = None
+        train_sampler = DistributedSampler(train_dataset, shuffle=True) if use_ddp else None
     else:
         num_samples = int(len(train_dataset) * args.samples_per_epoch_mult)
         if use_ddp:
@@ -383,10 +363,7 @@ def main():
                 weights=sample_weights, num_samples=num_samples, replacement=True,
             )
 
-    if use_ddp:
-        val_sampler = DistributedSampler(val_dataset, shuffle=False)
-    else:
-        val_sampler = None
+    val_sampler = DistributedSampler(val_dataset, shuffle=False) if use_ddp else None
 
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch,
@@ -401,18 +378,21 @@ def main():
     )
 
     model = build_model(actual_num_classes, args.backbone, args.pretrained).to(device)
+    ema = ModelEMA(model, decay=args.ema_decay)
 
     ckpt = None
     if args.resume:
         ckpt = torch.load(args.resume, map_location=device, weights_only=False)
         model.load_state_dict(ckpt["model_state_dict"])
+        if "ema_state_dict" in ckpt:
+            ema.ema.load_state_dict(ckpt["ema_state_dict"])
         if is_main:
             print(f"Resumed from: {args.resume}")
 
     if use_ddp:
         model = DDP(model, device_ids=[device.index])
 
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.2)
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.2, reduction="none")
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.05)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=args.epochs, eta_min=1e-6
@@ -431,18 +411,18 @@ def main():
 
         t0 = time.time()
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, scaler, device, epoch
+            model, train_loader, criterion, optimizer, scaler, device, epoch,
+            ema, head_set, mid_set, args.mixup_alpha,
         )
+        # validate with EMA weights
         val_loss, val_acc, val_top5, bucket_accs = validate(
-            model, val_loader, criterion, device,
-            head_set=head_set, mid_set=mid_set, tail_set=tail_set,
+            ema.ema, val_loader, nn.CrossEntropyLoss(label_smoothing=0.2),
+            device, head_set=head_set, mid_set=mid_set, tail_set=tail_set,
         )
         scheduler.step()
 
-        elapsed = time.time() - t0
-
         if is_main:
-            print(f"Epoch {epoch}/{args.epochs-1} ({elapsed:.0f}s) "
+            print(f"Epoch {epoch}/{args.epochs-1} ({time.time()-t0:.0f}s) "
                   f"train_loss={train_loss:.4f} train_acc={train_acc:.4f} "
                   f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} val_top5={val_top5:.4f} "
                   f"head={bucket_accs['head']:.3f} mid={bucket_accs['mid']:.3f} "
@@ -453,6 +433,7 @@ def main():
             checkpoint = {
                 "epoch": epoch,
                 "model_state_dict": raw_model.state_dict(),
+                "ema_state_dict": ema.ema.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
                 "val_acc": val_acc,
@@ -471,7 +452,6 @@ def main():
 
             if (epoch + 1) % 10 == 0:
                 torch.save(checkpoint, output_dir / f"epoch_{epoch}.pt")
-
             torch.save(checkpoint, output_dir / "last.pt")
 
     if is_main:
