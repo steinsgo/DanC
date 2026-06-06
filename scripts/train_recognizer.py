@@ -83,15 +83,19 @@ def compute_sample_weights(targets, num_classes, strategy="sqrt"):
     """
     Compute per-sample weights for long-tail rebalancing.
 
+    strategy:
+        "uniform"  -> all weights equal
+        "sqrt"     -> 1 / sqrt(count)            (power 0.5)
+        "balanced" -> 1 / count                  (power 1.0)
+        "powerXXX" -> 1 / count^XXX, e.g. "power0.25"
+
     Returns:
-        weights: np.ndarray of length len(targets), each entry is the
-                 sampling weight for that sample.
-        class_counts: dict {class_id: count} for diagnostics.
+        weights: np.ndarray of length len(targets)
+        class_counts: dict {class_id: count}
     """
     counter = Counter(targets)
     class_counts = np.array([counter.get(c, 0) for c in range(num_classes)],
                             dtype=np.float64)
-    # Avoid div-by-zero for unseen classes
     safe_counts = np.where(class_counts > 0, class_counts, 1.0)
 
     if strategy == "sqrt":
@@ -100,12 +104,13 @@ def compute_sample_weights(targets, num_classes, strategy="sqrt"):
         per_class_weight = 1.0 / safe_counts
     elif strategy == "uniform":
         per_class_weight = np.ones_like(safe_counts)
+    elif strategy.startswith("power"):
+        power = float(strategy.replace("power", ""))
+        per_class_weight = 1.0 / np.power(safe_counts, power)
     else:
         raise ValueError(f"Unknown sampling strategy: {strategy}")
 
-    # Normalize so the maximum class weight is 1 (numerical stability)
     per_class_weight = per_class_weight / per_class_weight.max()
-
     weights = np.array([per_class_weight[t] for t in targets], dtype=np.float64)
     return weights, dict(counter)
 
@@ -289,8 +294,7 @@ def main():
     parser.add_argument("--pretrained", type=str, default="",
                         help="Path to pretrained backbone weights")
     parser.add_argument("--sampling", type=str, default="sqrt",
-                        choices=["uniform", "sqrt", "balanced"],
-                        help="Long-tail rebalance sampling: sqrt=1/sqrt(count), balanced=1/count")
+                        help="Long-tail rebalance: uniform | sqrt | balanced | powerXXX (e.g. power0.25)")
     parser.add_argument("--samples_per_epoch_mult", type=float, default=1.0,
                         help="Multiplier for # of samples per epoch (only when sampling != uniform)")
     args = parser.parse_args()
