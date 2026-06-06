@@ -151,15 +151,17 @@ def build_model(num_classes: int, backbone: str = "resnet50", pretrained_path: s
         model = models.resnet50(weights=None)
         if pretrained_path:
             state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
-            model.load_state_dict(state_dict, strict=True)
-            print(f"Loaded pretrained weights: {pretrained_path}")
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            print(f"Loaded pretrained weights: {pretrained_path} "
+                  f"(missing={len(missing)}, unexpected={len(unexpected)})")
         model.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(model.fc.in_features, num_classes))
     elif backbone == "resnet101":
         model = models.resnet101(weights=None)
         if pretrained_path:
             state_dict = torch.load(pretrained_path, map_location="cpu", weights_only=True)
-            model.load_state_dict(state_dict, strict=True)
-            print(f"Loaded pretrained weights: {pretrained_path}")
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            print(f"Loaded pretrained weights: {pretrained_path} "
+                  f"(missing={len(missing)}, unexpected={len(unexpected)})")
         model.fc = nn.Sequential(nn.Dropout(0.3), nn.Linear(model.fc.in_features, num_classes))
     elif backbone == "efficientnet_b0":
         model = models.efficientnet_b0(weights=None)
