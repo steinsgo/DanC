@@ -178,6 +178,8 @@ def build_model(num_classes: int, backbone: str = "resnet50", pretrained_path: s
 def mixup_batch(images, labels, head_set, mid_set, alpha=0.4):
     """Apply Mixup only to samples whose label is in head or mid classes."""
     device = images.device
+    if alpha <= 0:
+        return images, labels, labels, torch.ones(len(labels), device=device)
     mask = torch.tensor(
         [int(l.item()) in head_set or int(l.item()) in mid_set for l in labels],
         dtype=torch.bool, device=device,
